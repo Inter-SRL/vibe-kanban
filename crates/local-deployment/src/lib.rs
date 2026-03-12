@@ -24,7 +24,7 @@ use services::services::{
     remote_client::{RemoteClient, RemoteClientError},
     repo::RepoService,
 };
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 use trusted_key_auth::runtime::TrustedKeyAuthRuntime;
 use utils::{
     assets::{config_path, credentials_path, server_signing_key_path, trusted_keys_path},
@@ -65,6 +65,7 @@ pub struct LocalDeployment {
     relay_control: Arc<RelayControl>,
     server_info: Arc<ServerInfo>,
     pty: PtyService,
+    pr_sync_notify: Arc<Notify>,
 }
 
 #[derive(Debug, Clone)]
@@ -208,6 +209,7 @@ impl Deployment for LocalDeployment {
         let file_search_cache = Arc::new(FileSearchCache::new());
 
         let pty = PtyService::new();
+        let pr_sync_notify = Arc::new(Notify::new());
         {
             let db = db.clone();
             let analytics = analytics.as_ref().map(|s| AnalyticsContext {
@@ -216,7 +218,7 @@ impl Deployment for LocalDeployment {
             });
             let container = container.clone();
             let rc = remote_client.clone().ok();
-            PrMonitorService::spawn(db, analytics, container, rc).await;
+            PrMonitorService::spawn(db, analytics, container, rc, pr_sync_notify.clone()).await;
         }
 
         let deployment = Self {
@@ -243,6 +245,7 @@ impl Deployment for LocalDeployment {
             relay_control,
             server_info,
             pty,
+            pr_sync_notify,
         };
 
         Ok(deployment)
@@ -389,5 +392,9 @@ impl LocalDeployment {
 
     pub fn pty(&self) -> &PtyService {
         &self.pty
+    }
+
+    pub fn trigger_pr_sync(&self) {
+        self.pr_sync_notify.notify_one();
     }
 }
