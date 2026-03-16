@@ -67,6 +67,21 @@ export class WebRtcConnection {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     const dc = pc.createDataChannel("relay", { ordered: true });
 
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log(
+          "[webrtc] ICE candidate:",
+          event.candidate.type,
+          event.candidate.protocol,
+          event.candidate.address,
+        );
+      } else {
+        console.log(
+          "[webrtc] ICE candidate gathering complete (null candidate)",
+        );
+      }
+    };
+
     const gatheringDone = new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
         console.log(
