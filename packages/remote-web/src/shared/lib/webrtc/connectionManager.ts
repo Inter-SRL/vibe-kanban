@@ -43,17 +43,21 @@ export function closeWebRtcConnection(hostId: string): void {
 }
 
 function startConnect(hostId: string): void {
+  console.log("[webrtc] connecting to host", hostId);
   hosts.set(hostId, { state: "connecting" });
 
   WebRtcConnection.connect(hostId, {
     onDisconnect: () => {
+      console.log("[webrtc] disconnected from host", hostId);
       hosts.delete(hostId);
     },
   })
     .then((connection) => {
+      console.log("[webrtc] connected to host", hostId);
       hosts.set(hostId, { state: "connected", connection });
     })
-    .catch(() => {
+    .catch((err) => {
+      console.warn("[webrtc] connection failed for host", hostId, err);
       hosts.set(hostId, { state: "failed", failedAt: Date.now() });
     });
 }

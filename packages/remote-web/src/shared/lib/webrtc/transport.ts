@@ -47,6 +47,7 @@ export async function requestLocalApiViaWebRtc(
     return requestLocalApiViaRelay(pathOrUrl, requestInit);
   }
 
+  console.log("[webrtc] request via data channel:", pathAndQuery);
   const method = (requestInit.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = {};
   if (requestInit.headers) {
@@ -83,7 +84,8 @@ export async function requestLocalApiViaWebRtc(
       bodyBytes,
     );
     return dataChannelResponseToResponse(dcResp);
-  } catch {
+  } catch (err) {
+    console.warn("[webrtc] request failed, falling back to relay:", err);
     return requestLocalApiViaRelay(pathOrUrl, requestInit);
   }
 }

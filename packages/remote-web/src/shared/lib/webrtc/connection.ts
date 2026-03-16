@@ -82,11 +82,14 @@ export class WebRtcConnection {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    console.log("[webrtc] waiting for ICE gathering...");
     await gatheringComplete;
+    console.log("[webrtc] ICE gathering complete");
 
     const sessionId = crypto.randomUUID();
     const offerSdp = pc.localDescription!.sdp;
 
+    console.log("[webrtc] sending offer to host", hostId);
     const sdpOffer: SdpOffer = { sdp: offerSdp, session_id: sessionId };
     const response = await requestRelayHostApi(hostId, "/api/webrtc/offer", {
       method: "POST",
@@ -102,10 +105,12 @@ export class WebRtcConnection {
     }
 
     const answer: SdpAnswer = await response.json();
+    console.log("[webrtc] received answer, setting remote description");
     await pc.setRemoteDescription({ type: "answer", sdp: answer.sdp });
 
     const conn = new WebRtcConnection(pc, dc, callbacks);
     await conn.waitForOpen();
+    console.log("[webrtc] data channel open");
     return conn;
   }
 
@@ -273,6 +278,7 @@ export class WebRtcConnection {
 
   private handleDisconnect(): void {
     if (!this.connected) return;
+    console.log("[webrtc] data channel disconnected");
     this.connected = false;
 
     for (const [id, pending] of this.pendingHttp) {
