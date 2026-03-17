@@ -1122,18 +1122,17 @@ export const approvalsApi = {
 };
 
 // OAuth API
+export type AuthMethodsResponse = {
+  local_auth_enabled: boolean;
+  oauth_providers: string[];
+};
+
 export const oauthApi = {
-  authMethods: async (): Promise<{
-    local_auth_enabled: boolean;
-    oauth_providers: string[];
-  }> => {
+  authMethods: async (): Promise<AuthMethodsResponse> => {
     const response = await makeRequest('/api/auth/methods', {
       cache: 'no-store',
     });
-    return handleApiResponse<{
-      local_auth_enabled: boolean;
-      oauth_providers: string[];
-    }>(response);
+    return handleApiResponse<AuthMethodsResponse>(response);
   },
 
   handoffInit: async (

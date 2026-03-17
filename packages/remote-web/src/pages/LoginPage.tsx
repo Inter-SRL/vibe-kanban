@@ -14,6 +14,8 @@ import {
   generateChallenge,
   storeVerifier,
 } from "@remote/shared/lib/pkce";
+import { Input } from "@vibe/ui/components/Input";
+import { Label } from "@vibe/ui/components/Label";
 
 export default function LoginPage() {
   const { next } = useSearch({ from: "/account" });
@@ -21,14 +23,19 @@ export default function LoginPage() {
   const [pending, setPending] = useState<OAuthProvider | "local" | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { data: authMethods } = useQuery({
+  const {
+    data: authMethods,
+    error: authMethodsError,
+    isError: isAuthMethodsError,
+  } = useQuery({
     queryKey: ["remote-auth-methods"],
     queryFn: getAuthMethods,
     staleTime: 60_000,
   });
 
-  const localAuthEnabled = authMethods?.local_auth_enabled ?? false;
+  const hasLocalAuth = authMethods?.local_auth_enabled ?? false;
   const oauthProviders = authMethods?.oauth_providers ?? [];
+  const hasOAuthProviders = oauthProviders.length > 0;
 
   const handleLogin = async (provider: OAuthProvider) => {
     setPending(provider);
@@ -89,25 +96,41 @@ export default function LoginPage() {
             </div>
           )}
 
+          {isAuthMethodsError && (
+            <div className="rounded-sm border border-error/30 bg-error/10 p-base">
+              <p className="text-sm text-high">
+                {authMethodsError instanceof Error
+                  ? authMethodsError.message
+                  : "Failed to load available sign-in methods."}
+              </p>
+            </div>
+          )}
+
           <section className="space-y-3">
-            {localAuthEnabled && (
+            {!isAuthMethodsError && hasLocalAuth && (
               <div className="space-y-3 rounded-sm border border-border bg-primary p-base">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Email"
-                  className="w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-high"
-                  autoComplete="username"
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Password"
-                  className="w-full rounded-sm border border-border bg-secondary px-3 py-2 text-sm text-high"
-                  autoComplete="current-password"
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="self-host-email">Email</Label>
+                  <Input
+                    id="self-host-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="Email"
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="self-host-password">Password</Label>
+                  <Input
+                    id="self-host-password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Password"
+                    autoComplete="current-password"
+                  />
+                </div>
                 <button
                   type="button"
                   className="w-full rounded-sm bg-brand px-base py-half text-sm font-medium text-on-brand transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
@@ -119,7 +142,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            {localAuthEnabled && oauthProviders.length > 0 && (
+            {!isAuthMethodsError && hasLocalAuth && hasOAuthProviders && (
               <div className="flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-low">
                 <div className="h-px flex-1 bg-border" />
                 <span>or continue with</span>
@@ -128,24 +151,28 @@ export default function LoginPage() {
             )}
 
             <div className="flex flex-col items-center gap-2">
-              {oauthProviders.includes("github") && (
-                <OAuthButton
-                  provider="github"
-                  label="Continue with GitHub"
-                  onClick={() => void handleLogin("github")}
-                  disabled={pending !== null}
-                  loading={pending === "github"}
-                />
-              )}
-              {oauthProviders.includes("google") && (
-                <OAuthButton
-                  provider="google"
-                  label="Continue with Google"
-                  onClick={() => void handleLogin("google")}
-                  disabled={pending !== null}
-                  loading={pending === "google"}
-                />
-              )}
+              {!isAuthMethodsError &&
+                hasOAuthProviders &&
+                oauthProviders.includes("github") && (
+                  <OAuthButton
+                    provider="github"
+                    label="Continue with GitHub"
+                    onClick={() => void handleLogin("github")}
+                    disabled={pending !== null}
+                    loading={pending === "github"}
+                  />
+                )}
+              {!isAuthMethodsError &&
+                hasOAuthProviders &&
+                oauthProviders.includes("google") && (
+                  <OAuthButton
+                    provider="google"
+                    label="Continue with Google"
+                    onClick={() => void handleLogin("google")}
+                    disabled={pending !== null}
+                    loading={pending === "google"}
+                  />
+                )}
             </div>
           </section>
 

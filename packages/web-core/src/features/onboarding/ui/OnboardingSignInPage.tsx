@@ -12,7 +12,7 @@ import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { useTheme } from '@/shared/hooks/useTheme';
 import { OAuthSignInButton } from '@vibe/ui/components/OAuthButtons';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
-import { oauthApi } from '@/shared/lib/api';
+import { oauthApi, type AuthMethodsResponse } from '@/shared/lib/api';
 import { getFirstProjectDestination } from '@/shared/lib/firstProjectDestination';
 import { useOrganizationStore } from '@/shared/stores/useOrganizationStore';
 import { isTauriApp } from '@/shared/lib/platform';
@@ -88,13 +88,18 @@ export function OnboardingSignInPage() {
     null
   );
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
-  const { data: authMethods } = useQuery({
+  const {
+    data: authMethods,
+    error: authMethodsError,
+    isError: isAuthMethodsError,
+  } = useQuery({
     queryKey: ['auth', 'methods'],
-    queryFn: () => oauthApi.authMethods(),
+    queryFn: (): Promise<AuthMethodsResponse> => oauthApi.authMethods(),
     staleTime: 60_000,
   });
-  const localAuthEnabled = authMethods?.local_auth_enabled ?? false;
+  const hasLocalAuth = authMethods?.local_auth_enabled ?? false;
   const oauthProviders = authMethods?.oauth_providers ?? [];
+  const hasOAuthProviders = oauthProviders.length > 0;
 
   const trackRemoteOnboardingEvent = useCallback(
     (eventName: string, properties: Record<string, unknown> = {}) => {
@@ -239,10 +244,7 @@ export function OnboardingSignInPage() {
 
     if (profile) {
       await finishOnboarding({
-        method:
-          localAuthEnabled && oauthProviders.length === 0
-            ? 'local_auth'
-            : 'auth_dialog',
+        method: 'auth_dialog',
       });
     }
   };
@@ -287,6 +289,16 @@ export function OnboardingSignInPage() {
             )}
           </header>
 
+          {isAuthMethodsError && !isLoggedIn && (
+            <div className="rounded-sm border border-error/30 bg-error/10 p-base">
+              <p className="text-sm text-high">
+                {authMethodsError instanceof Error
+                  ? authMethodsError.message
+                  : 'Failed to load available sign-in methods.'}
+              </p>
+            </div>
+          )}
+
           {isLoggedIn ? (
             <section className="space-y-base">
               <p className="text-sm text-normal text-center">
@@ -308,7 +320,7 @@ export function OnboardingSignInPage() {
           ) : (
             <>
               <section className="flex flex-col items-center gap-2">
-                {localAuthEnabled ? (
+                {!isAuthMethodsError && hasLocalAuth ? (
                   <PrimaryButton
                     value={isAuthDialogOpen ? 'Opening sign in...' : 'Sign in'}
                     onClick={() => void handleDialogSignIn()}
@@ -316,9 +328,9 @@ export function OnboardingSignInPage() {
                       saving || pendingProvider !== null || isAuthDialogOpen
                     }
                   />
-                ) : (
+                ) : !isAuthMethodsError ? (
                   <>
-                    {oauthProviders.includes('github') && (
+                    {hasOAuthProviders && oauthProviders.includes('github') && (
                       <OAuthSignInButton
                         provider="github"
                         onClick={() => void handleProviderSignIn('github')}
@@ -327,7 +339,7 @@ export function OnboardingSignInPage() {
                         loadingText="Opening GitHub..."
                       />
                     )}
-                    {oauthProviders.includes('google') && (
+                    {hasOAuthProviders && oauthProviders.includes('google') && (
                       <OAuthSignInButton
                         provider="google"
                         onClick={() => void handleProviderSignIn('google')}
@@ -337,7 +349,7 @@ export function OnboardingSignInPage() {
                       />
                     )}
                   </>
-                )}
+                ) : null}
               </section>
 
               <div className="flex justify-center">

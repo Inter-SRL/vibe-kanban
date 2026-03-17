@@ -11,7 +11,6 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use secrecy::ExposeSecret;
 use serde::Deserialize;
 use tracing::warn;
 use url::Url;
@@ -20,14 +19,11 @@ use uuid::Uuid;
 use crate::{
     AppState,
     audit::{self, AuditAction, AuditEvent},
-    auth::{CallbackResult, HandoffError, RequestContext},
-    db::{
-        auth::AuthSessionRepository,
-        oauth::OAuthHandoffError,
-        oauth_accounts::OAuthAccountRepository,
-        organizations::OrganizationRepository,
-        users::{UpsertUser, UserRepository},
+    auth::{
+        CallbackResult, HandoffError, LocalAuthError, RequestContext, auth_methods_response,
+        login as local_login_flow,
     },
+    db::{oauth::OAuthHandoffError, oauth_accounts::OAuthAccountRepository},
 };
 
 pub fn public_router() -> Router<AppState> {
@@ -41,10 +37,7 @@ pub fn public_router() -> Router<AppState> {
 }
 
 pub async fn auth_methods(State(state): State<AppState>) -> Json<AuthMethodsResponse> {
-    Json(AuthMethodsResponse {
-        local_auth_enabled: state.config().auth.local().is_some(),
-        oauth_providers: state.providers().names(),
-    })
+    Json(auth_methods_response(&state))
 }
 
 pub fn protected_router() -> Router<AppState> {
@@ -121,108 +114,9 @@ pub async fn web_redeem(
 pub async fn local_login(
     State(state): State<AppState>,
     Json(payload): Json<LocalLoginRequest>,
-) -> Response {
-    let Some(local_auth) = state.config().auth.local() else {
-        return json_error(StatusCode::NOT_FOUND, "not_found");
-    };
-
-    let normalized_email = local_auth.email().trim().to_ascii_lowercase();
-
-    if payload.email.trim().to_ascii_lowercase() != normalized_email
-        || payload.password != local_auth.password().expose_secret()
-    {
-        return json_error(StatusCode::UNAUTHORIZED, "invalid_credentials");
-    }
-
-    let user_repo = UserRepository::new(state.pool());
-    let org_repo = OrganizationRepository::new(state.pool());
-    let session_repo = AuthSessionRepository::new(state.pool());
-
-    let existing_user = match user_repo.fetch_user_by_email(&normalized_email).await {
-        Ok(user) => user,
-        Err(error) => {
-            tracing::error!(?error, "failed to fetch local auth user by email");
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error");
-        }
-    };
-    let user_id = existing_user
-        .as_ref()
-        .map(|user| user.id)
-        .unwrap_or_else(Uuid::new_v4);
-
-    let username = existing_user
-        .as_ref()
-        .and_then(|user| user.username.clone());
-
-    let user = match user_repo
-        .upsert_user(UpsertUser {
-            id: user_id,
-            email: &normalized_email,
-            first_name: existing_user
-                .as_ref()
-                .and_then(|user| user.first_name.as_deref()),
-            last_name: existing_user
-                .as_ref()
-                .and_then(|user| user.last_name.as_deref()),
-            username: username.as_deref(),
-        })
-        .await
-    {
-        Ok(user) => user,
-        Err(error) => {
-            tracing::error!(?error, "failed to upsert local auth user");
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error");
-        }
-    };
-
-    if let Err(error) = org_repo
-        .ensure_personal_org_and_admin_membership(user.id, username.as_deref())
-        .await
-    {
-        tracing::error!(?error, "failed to ensure local auth personal organization");
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error");
-    }
-
-    let session = match session_repo.create(user.id, None).await {
-        Ok(session) => session,
-        Err(error) => {
-            tracing::error!(?error, "failed to create local auth session");
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error");
-        }
-    };
-
-    let tokens = match state.jwt().generate_tokens(&session, &user, "local") {
-        Ok(tokens) => tokens,
-        Err(error) => {
-            tracing::error!(?error, "failed to generate local auth tokens");
-            return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error");
-        }
-    };
-
-    if let Err(error) = session_repo
-        .set_current_refresh_token(session.id, tokens.refresh_token_id)
-        .await
-    {
-        tracing::error!(?error, "failed to persist local auth refresh token");
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_error");
-    }
-
-    if let Some(analytics) = state.analytics() {
-        analytics.track(
-            user.id,
-            "$identify",
-            serde_json::json!({ "email": user.email }),
-        );
-    }
-
-    (
-        StatusCode::OK,
-        Json(LocalLoginResponse {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-        }),
-    )
-        .into_response()
+) -> Result<Json<LocalLoginResponse>, LocalAuthError> {
+    let response = local_login_flow(&state, &payload).await?;
+    Ok(Json(response))
 }
 
 #[derive(Debug, Deserialize)]
@@ -445,10 +339,6 @@ fn classify_handoff_error(error: &HandoffError) -> (StatusCode, Cow<'_, str>) {
             ),
         },
     }
-}
-
-fn json_error(status: StatusCode, error: &'static str) -> Response {
-    (status, Json(serde_json::json!({ "error": error }))).into_response()
 }
 
 fn append_query_params(
