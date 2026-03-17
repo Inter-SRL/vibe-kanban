@@ -159,8 +159,7 @@ impl Sink<tungstenite::Message> for WebRtcWsStream {
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let this = self.get_mut();
-        ready!(this.poll_sender.poll_reserve(cx))
-            .map_err(|_| anyhow::anyhow!("channel closed"))?;
+        ready!(this.poll_sender.poll_reserve(cx)).map_err(|_| anyhow::anyhow!("channel closed"))?;
         Poll::Ready(Ok(()))
     }
 
@@ -196,8 +195,7 @@ impl Sink<tungstenite::Message> for WebRtcWsStream {
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let this = self.get_mut();
-        ready!(this.poll_sender.poll_reserve(cx))
-            .map_err(|_| anyhow::anyhow!("channel closed"))?;
+        ready!(this.poll_sender.poll_reserve(cx)).map_err(|_| anyhow::anyhow!("channel closed"))?;
 
         let msg = DataChannelMessage::WsClose(WsClose {
             conn_id: this.conn_id.clone(),

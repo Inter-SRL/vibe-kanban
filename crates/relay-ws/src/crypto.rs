@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 // Public frame types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum RelayWsMessageType {
     Text,
