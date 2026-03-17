@@ -94,6 +94,7 @@ import {
   RelayPairedClient,
   ListRelayPairedClientsResponse,
   RemoveRelayPairedClientResponse,
+  ProfileResponse,
 } from 'shared/types';
 import type { Project as RemoteProject } from 'shared/remote-types';
 import type { WorkspaceWithSession } from '@/shared/types/attempt';
@@ -1122,6 +1123,19 @@ export const approvalsApi = {
 
 // OAuth API
 export const oauthApi = {
+  authMethods: async (): Promise<{
+    local_auth_enabled: boolean;
+    oauth_providers: string[];
+  }> => {
+    const response = await makeRequest('/api/auth/methods', {
+      cache: 'no-store',
+    });
+    return handleApiResponse<{
+      local_auth_enabled: boolean;
+      oauth_providers: string[];
+    }>(response);
+  },
+
   handoffInit: async (
     provider: string,
     returnTo: string
@@ -1140,6 +1154,17 @@ export const oauthApi = {
       cache: 'no-store',
     });
     return handleApiResponse<StatusResponse>(response);
+  },
+
+  localLogin: async (
+    email: string,
+    password: string
+  ): Promise<ProfileResponse> => {
+    const response = await makeRequest('/api/auth/local/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    return handleApiResponse<ProfileResponse>(response);
   },
 
   logout: async (): Promise<void> => {

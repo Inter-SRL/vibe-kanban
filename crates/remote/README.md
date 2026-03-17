@@ -47,11 +47,31 @@ cd crates/remote
 docker compose --env-file .env.remote -f docker-compose.yml up --build
 ```
 
-This starts PostgreSQL, ElectricSQL, the Remote Server, and the Relay Server.
+This starts PostgreSQL, ElectricSQL, and the Remote Server.
 
 - Remote web UI/API: `https://localhost:3001` (via Caddy) or `http://localhost:3000` (direct)
-- Relay API: `http://localhost:8082`
 - Postgres: `postgres://remote:remote@localhost:5433/remote`
+
+### Optional profiles
+
+Relay and Azurite-backed attachments are now opt-in Docker Compose profiles:
+
+```bash
+cd crates/remote
+
+# Enable relay support
+docker compose --env-file .env.remote --profile relay up --build
+
+# Enable Azurite for issue attachments
+docker compose --env-file .env.remote --profile attachments up --build
+
+# Enable both
+docker compose --env-file .env.remote --profile relay --profile attachments up --build
+```
+
+With the `relay` profile enabled:
+
+- Relay API: `http://localhost:8082`
 
 ## Run Vibe Kanban
 
@@ -126,7 +146,14 @@ Open **https://localhost:3001** in your browser.
 
 ## Run desktop with relay tunnel (optional)
 
-To test relay/tunnel mode end-to-end:
+Start the stack with the `relay` profile enabled before running the desktop app:
+
+```bash
+cd crates/remote
+docker compose --env-file .env.remote --profile relay up --build
+```
+
+Then, to test relay/tunnel mode end-to-end:
 
 ```bash
 export VK_SHARED_API_BASE=https://localhost:3001

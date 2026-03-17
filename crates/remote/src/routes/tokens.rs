@@ -147,14 +147,16 @@ pub async fn refresh_token(
         );
     }
 
-    state
-        .oauth_token_validator()
-        .validate(
-            &token_details.provider,
-            token_details.user_id,
-            token_details.session_id,
-        )
-        .await?;
+    if token_details.provider != "local" {
+        state
+            .oauth_token_validator()
+            .validate(
+                &token_details.provider,
+                token_details.user_id,
+                token_details.session_id,
+            )
+            .await?;
+    }
 
     let user_repo = UserRepository::new(state.pool());
     let user = user_repo.fetch_user(token_details.user_id).await?;

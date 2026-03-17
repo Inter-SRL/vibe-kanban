@@ -307,9 +307,53 @@ impl OAuthProviderConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct LocalAuthConfig {
+    email: String,
+    password: SecretString,
+}
+
+impl LocalAuthConfig {
+    fn from_env() -> Result<Option<Self>, ConfigError> {
+        let email = env::var("SELF_HOST_LOCAL_AUTH_EMAIL").ok();
+        let password = env::var("SELF_HOST_LOCAL_AUTH_PASSWORD").ok();
+
+        let (email, password) = match (email, password) {
+            (None, None) => return Ok(None),
+            (Some(email), Some(password)) => (email, password),
+            (None, Some(_)) => return Err(ConfigError::MissingVar("SELF_HOST_LOCAL_AUTH_EMAIL")),
+            (Some(_), None) => {
+                return Err(ConfigError::MissingVar("SELF_HOST_LOCAL_AUTH_PASSWORD"));
+            }
+        };
+
+        if email.trim().is_empty() {
+            return Err(ConfigError::InvalidVar("SELF_HOST_LOCAL_AUTH_EMAIL"));
+        }
+
+        if password.is_empty() {
+            return Err(ConfigError::InvalidVar("SELF_HOST_LOCAL_AUTH_PASSWORD"));
+        }
+
+        Ok(Some(Self {
+            email,
+            password: SecretString::new(password.into()),
+        }))
+    }
+
+    pub fn email(&self) -> &str {
+        &self.email
+    }
+
+    pub fn password(&self) -> &SecretString {
+        &self.password
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AuthConfig {
     github: Option<OAuthProviderConfig>,
     google: Option<OAuthProviderConfig>,
+    local: Option<LocalAuthConfig>,
     jwt_secret: SecretString,
     public_base_url: String,
 }
@@ -345,7 +389,9 @@ impl AuthConfig {
             _ => None,
         };
 
-        if github.is_none() && google.is_none() {
+        let local = LocalAuthConfig::from_env()?;
+
+        if github.is_none() && google.is_none() && local.is_none() {
             return Err(ConfigError::NoOAuthProviders);
         }
 
@@ -355,6 +401,7 @@ impl AuthConfig {
         Ok(Self {
             github,
             google,
+            local,
             jwt_secret,
             public_base_url,
         })
@@ -366,6 +413,10 @@ impl AuthConfig {
 
     pub fn google(&self) -> Option<&OAuthProviderConfig> {
         self.google.as_ref()
+    }
+
+    pub fn local(&self) -> Option<&LocalAuthConfig> {
+        self.local.as_ref()
     }
 
     pub fn jwt_secret(&self) -> &SecretString {
