@@ -12,6 +12,10 @@ import { useScrollSyncStateMachine } from '@/shared/hooks/useScrollSyncStateMach
 import { usePersistedExpanded } from '@/shared/stores/useUiPreferencesStore';
 import { PierreDiffCard } from './PierreDiffCard';
 import type { Diff, DiffChangeKind } from 'shared/types';
+import {
+  applySearchTextHighlights,
+  clearSearchTextHighlights,
+} from '@/shared/lib/searchTextHighlight';
 
 // Auto-collapse defaults based on change type (matches DiffsPanel behavior)
 const COLLAPSE_BY_CHANGE_TYPE: Record<DiffChangeKind, boolean> = {
@@ -253,6 +257,45 @@ export function ChangesPanelContainer({
     };
   }, [showSearch]);
 
+  useEffect(() => {
+    const root = panelRef.current;
+    if (!root) return;
+
+    let isApplying = false;
+
+    const apply = () => {
+      if (!panelRef.current) return;
+      isApplying = true;
+      clearSearchTextHighlights(panelRef.current);
+      if (showSearch && searchQuery.trim()) {
+        applySearchTextHighlights(panelRef.current, searchQuery);
+      }
+      isApplying = false;
+    };
+
+    apply();
+
+    if (!showSearch || !searchQuery.trim()) {
+      return;
+    }
+
+    const observer = new MutationObserver(() => {
+      if (isApplying) return;
+      requestAnimationFrame(apply);
+    });
+
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => {
+      observer.disconnect();
+      clearSearchTextHighlights(root);
+    };
+  }, [showSearch, searchQuery, diffItems, currentMatchIdx]);
+
   const indexToPath = useCallback(
     (index: number): string | null => {
       const item = diffItems[index];
@@ -460,7 +503,10 @@ export function ChangesPanelContainer({
       className="relative h-full"
     >
       {showSearch && (
-        <div className="absolute right-3 top-3 z-20 flex items-center gap-2 rounded-sm border border-border bg-secondary p-2 shadow-lg">
+        <div
+          data-vk-search-ignore="true"
+          className="absolute right-3 top-3 z-20 flex items-center gap-2 rounded-sm border border-border bg-secondary p-2 shadow-lg"
+        >
           <input
             ref={searchInputRef}
             type="text"
