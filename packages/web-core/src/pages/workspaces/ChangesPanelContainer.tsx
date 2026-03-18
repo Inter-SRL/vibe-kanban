@@ -126,6 +126,9 @@ export function ChangesPanelContainer({
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const diffItems = useMemo(() => {
     return sortDiffs(diffs).map((diff) => {
@@ -260,40 +263,11 @@ export function ChangesPanelContainer({
   useEffect(() => {
     const root = panelRef.current;
     if (!root) return;
-
-    let isApplying = false;
-
-    const apply = () => {
-      if (!panelRef.current) return;
-      isApplying = true;
-      clearSearchTextHighlights(panelRef.current);
-      if (showSearch && searchQuery.trim()) {
-        applySearchTextHighlights(panelRef.current, searchQuery);
-      }
-      isApplying = false;
-    };
-
-    apply();
-
-    if (!showSearch || !searchQuery.trim()) {
-      return;
+    clearSearchTextHighlights(root);
+    const query = searchQuery.trim();
+    if (showSearch && query.length >= 2) {
+      applySearchTextHighlights(root, query);
     }
-
-    const observer = new MutationObserver(() => {
-      if (isApplying) return;
-      requestAnimationFrame(apply);
-    });
-
-    observer.observe(root, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
-    return () => {
-      observer.disconnect();
-      clearSearchTextHighlights(root);
-    };
   }, [showSearch, searchQuery, diffItems, currentMatchIdx]);
 
   const indexToPath = useCallback(
@@ -381,13 +355,37 @@ export function ChangesPanelContainer({
       if (topPath !== null) {
         setFileInView(topPath);
       }
+
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+      highlightTimeoutRef.current = setTimeout(() => {
+        if (!panelRef.current) return;
+        clearSearchTextHighlights(panelRef.current);
+        const query = searchQuery.trim();
+        // Keep card-level matches for single-char search; inline highlight starts at 2 chars.
+        if (showSearch && query.length >= 2) {
+          applySearchTextHighlights(panelRef.current, query);
+        }
+      }, 80);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       container.removeEventListener('scroll', handleScroll);
     };
-  }, [getTopFilePath, setFileInView]);
+  }, [getTopFilePath, setFileInView, searchQuery, showSearch]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+      if (panelRef.current) {
+        clearSearchTextHighlights(panelRef.current);
+      }
+    };
+  }, []);
 
   const handleRangeChanged = useCallback(
     (range: { startIndex: number; endIndex: number }) => {
