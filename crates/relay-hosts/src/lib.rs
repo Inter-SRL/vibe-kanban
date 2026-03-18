@@ -579,8 +579,18 @@ impl RelayHost {
         editor_type: Option<&str>,
         file_path: Option<&str>,
     ) -> Result<OpenRemoteEditorResponse, OpenRemoteEditorError> {
-        let mut transport = self.open_transport().await?;
         let editor_path_api_path = build_workspace_editor_path_api_path(workspace_id, file_path);
+
+        // Try the fully-WebRTC path: HTTP for editor path + WS tunnel for SSH.
+        if let Some(result) = self
+            .try_webrtc_open_editor(&editor_path_api_path, editor_type)
+            .await
+        {
+            return result;
+        }
+
+        // Fall back to relay for everything.
+        let mut transport = self.open_transport().await?;
         let editor_path = transport
             .get_signed_json::<RelayEditorPathResponse>(&editor_path_api_path)
             .await;
@@ -596,6 +606,9 @@ impl RelayHost {
             .await
             .map_err(OpenRemoteEditorError::CreateTunnel)?;
 
+        // Kick off WebRTC for future requests.
+        self.maybe_start_webrtc(transport).await;
+
         desktop_bridge::service::open_remote_editor(
             local_port,
             &self.runtime.relay_signing,
@@ -604,6 +617,100 @@ impl RelayHost {
             editor_type,
         )
         .map_err(OpenRemoteEditorError::SshSetup)
+    }
+
+    /// Try the full "open editor" flow over WebRTC: resolve the editor path
+    /// via HTTP data channel, then create an SSH tunnel via WS data channel.
+    async fn try_webrtc_open_editor(
+        &self,
+        editor_path_api_path: &str,
+        editor_type: Option<&str>,
+    ) -> Option<Result<OpenRemoteEditorResponse, OpenRemoteEditorError>> {
+        // Resolve editor path via WebRTC HTTP.
+        let response = self
+            .try_webrtc_proxy(&Method::GET, editor_path_api_path, &HeaderMap::new(), &[])
+            .await?;
+        if response.status != 200 {
+            tracing::debug!(
+                status = response.status,
+                "WebRTC editor path request returned non-200, falling back to relay"
+            );
+            return None;
+        }
+        let editor_path = match serde_json::from_slice::<RelayEditorPathResponse>(&response.body) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::debug!(?e, "Failed to parse WebRTC editor path response");
+                return None;
+            }
+        };
+
+        // Create SSH tunnel via WebRTC WS.
+        let local_port = match self.create_webrtc_ssh_tunnel().await {
+            Some(port) => port,
+            None => return None,
+        };
+
+        Some(
+            desktop_bridge::service::open_remote_editor(
+                local_port,
+                &self.runtime.relay_signing.signing_key(),
+                &self.identity.host_id.to_string(),
+                &editor_path.workspace_path,
+                editor_type,
+            )
+            .map_err(OpenRemoteEditorError::SshSetup),
+        )
+    }
+
+    /// Bind a local TCP listener and bridge each accepted connection to the
+    /// host's `/api/ssh-session` endpoint via a WebRTC WS data channel.
+    async fn create_webrtc_ssh_tunnel(&self) -> Option<u16> {
+        let client = self.webrtc.get(self.identity.host_id).await?;
+        if !client.is_connected() {
+            return None;
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.ok()?;
+        let local_port = listener.local_addr().ok()?.port();
+
+        let webrtc = self.webrtc.clone();
+        let host_id = self.identity.host_id;
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut tcp_stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let Some(client) = webrtc.get(host_id).await else {
+                    break;
+                };
+                if !client.is_connected() {
+                    break;
+                }
+
+                tokio::spawn(async move {
+                    match client.open_ws("/api/ssh-session", None).await {
+                        Ok(ws_conn) => {
+                            let ws_stream = ws_conn.into_ws_stream();
+                            let mut ws_io =
+                                relay_tunnel::ws_io::tungstenite_ws_stream_io(ws_stream);
+                            if let Err(e) =
+                                tokio::io::copy_bidirectional(&mut tcp_stream, &mut ws_io).await
+                            {
+                                tracing::debug!(?e, "WebRTC SSH tunnel bridge ended");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!(?e, "WebRTC WS open for SSH tunnel failed");
+                        }
+                    }
+                });
+            }
+        });
+
+        tracing::info!(local_port, "SSH tunnel created via WebRTC");
+        Some(local_port)
     }
 }
 

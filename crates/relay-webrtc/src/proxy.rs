@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use base64::Engine as _;
-use relay_ws::{RelayWsFrame, RelayWsMessageType};
+use relay_ws::{RelayTransportMessage, RelayWsFrame, RelayWsMessageType};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -96,9 +96,6 @@ pub struct WsOpened {
 }
 
 /// A single WebSocket frame (bidirectional), serialized over the data channel.
-///
-/// Wraps [`RelayWsFrame`] with a `conn_id` for multiplexing and base64-encoded
-/// payload for JSON transport.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WsFrame {
     pub conn_id: String,
@@ -109,22 +106,25 @@ pub struct WsFrame {
 }
 
 impl WsFrame {
-    /// Create a `WsFrame` from a [`RelayWsFrame`] and a connection ID.
-    pub fn from_relay_frame(conn_id: String, frame: RelayWsFrame) -> Self {
-        let payload_b64 = if frame.payload.is_empty() {
+    /// Create a `WsFrame` from any [`RelayTransportMessage`] and a connection ID.
+    pub fn from_transport<M: RelayTransportMessage>(conn_id: String, msg: M) -> Self {
+        let RelayWsFrame { msg_type, payload } = msg.decompose();
+
+        let payload_b64 = if payload.is_empty() {
             None
         } else {
-            Some(base64::engine::general_purpose::STANDARD.encode(&frame.payload))
+            Some(base64::engine::general_purpose::STANDARD.encode(&payload))
         };
+
         Self {
             conn_id,
-            msg_type: frame.msg_type,
+            msg_type,
             payload_b64,
         }
     }
 
-    /// Convert back to a [`RelayWsFrame`], decoding the base64 payload.
-    pub fn into_relay_frame(self) -> RelayWsFrame {
+    /// Convert into any [`RelayTransportMessage`], decoding the base64 payload.
+    pub fn into_transport<M: RelayTransportMessage>(self) -> anyhow::Result<M> {
         let payload = self
             .payload_b64
             .as_deref()
@@ -134,10 +134,15 @@ impl WsFrame {
                     .unwrap_or_default()
             })
             .unwrap_or_default();
-        RelayWsFrame {
+
+        M::reconstruct(RelayWsFrame {
             msg_type: self.msg_type,
             payload,
-        }
+        })
+    }
+
+    pub fn is_close(&self) -> bool {
+        matches!(self.msg_type, RelayWsMessageType::Close)
     }
 }
 
@@ -162,6 +167,8 @@ pub struct WsError {
 
 #[cfg(test)]
 mod tests {
+    use tokio_tungstenite::tungstenite;
+
     use super::*;
 
     #[test]
@@ -195,5 +202,41 @@ mod tests {
         let json = serde_json::to_vec(&msg).unwrap();
         let parsed: DataChannelMessage = serde_json::from_slice(&json).unwrap();
         assert!(matches!(parsed, DataChannelMessage::HttpResponse(_)));
+    }
+
+    #[test]
+    fn ws_frame_tungstenite_roundtrip() {
+        let msg = tungstenite::Message::Text("hello".into());
+        let frame = WsFrame::from_transport("conn-1".into(), msg);
+        assert!(matches!(frame.msg_type, RelayWsMessageType::Text));
+        let back: tungstenite::Message = frame.into_transport().unwrap();
+        assert_eq!(back, tungstenite::Message::Text("hello".into()));
+    }
+
+    #[test]
+    fn ws_frame_binary_roundtrip() {
+        let data = vec![1u8, 2, 3, 4];
+        let msg = tungstenite::Message::Binary(data.clone().into());
+        let frame = WsFrame::from_transport("conn-1".into(), msg);
+        assert!(matches!(frame.msg_type, RelayWsMessageType::Binary));
+        let back: tungstenite::Message = frame.into_transport().unwrap();
+        assert_eq!(back, tungstenite::Message::Binary(data.into()));
+    }
+
+    #[test]
+    fn ws_frame_close_roundtrip() {
+        let msg = tungstenite::Message::Close(Some(tungstenite::protocol::CloseFrame {
+            code: 1000u16.into(),
+            reason: "normal".into(),
+        }));
+        let frame = WsFrame::from_transport("conn-1".into(), msg);
+        assert!(frame.is_close());
+        let back: tungstenite::Message = frame.into_transport().unwrap();
+        if let tungstenite::Message::Close(Some(cf)) = back {
+            assert_eq!(u16::from(cf.code), 1000);
+            assert_eq!(&*cf.reason, "normal");
+        } else {
+            panic!("expected Close");
+        }
     }
 }

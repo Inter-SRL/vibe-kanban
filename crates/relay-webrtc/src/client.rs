@@ -10,7 +10,6 @@ use std::{
 
 use bytes::Bytes;
 use futures_util::{Sink, Stream};
-use relay_ws::{RelayTransportMessage, RelayWsMessageType};
 use tokio::{
     sync::{Mutex, mpsc, oneshot},
     time::Duration,
@@ -144,10 +143,7 @@ impl Stream for WebRtcWsStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         match this.frame_rx.poll_recv(cx) {
-            Poll::Ready(Some(ws_frame)) => {
-                let relay_frame = ws_frame.into_relay_frame();
-                Poll::Ready(Some(tungstenite::Message::reconstruct(relay_frame)))
-            }
+            Poll::Ready(Some(ws_frame)) => Poll::Ready(Some(ws_frame.into_transport())),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
@@ -165,9 +161,9 @@ impl Sink<tungstenite::Message> for WebRtcWsStream {
 
     fn start_send(self: Pin<&mut Self>, item: tungstenite::Message) -> Result<(), Self::Error> {
         let this = self.get_mut();
-        let relay_frame = item.decompose();
+        let ws_frame = WsFrame::from_transport(this.conn_id.clone(), item);
 
-        if matches!(relay_frame.msg_type, RelayWsMessageType::Close) {
+        if ws_frame.is_close() {
             let msg = DataChannelMessage::WsClose(WsClose {
                 conn_id: this.conn_id.clone(),
                 code: None,
@@ -180,7 +176,6 @@ impl Sink<tungstenite::Message> for WebRtcWsStream {
             return Ok(());
         }
 
-        let ws_frame = WsFrame::from_relay_frame(this.conn_id.clone(), relay_frame);
         let msg = DataChannelMessage::WsFrame(ws_frame);
         let data = serde_json::to_vec(&msg)?;
         this.poll_sender

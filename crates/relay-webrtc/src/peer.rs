@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use relay_ws::{RelayTransportMessage, RelayWsMessageType};
 use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 use webrtc::{
@@ -460,9 +459,8 @@ async fn run_ws_bridge(
                 Err(_) => break,
             };
 
-            let relay_frame = msg.decompose();
-            let is_close = matches!(relay_frame.msg_type, RelayWsMessageType::Close);
-            let ws_frame = WsFrame::from_relay_frame(conn_id_up.clone(), relay_frame);
+            let ws_frame = WsFrame::from_transport(conn_id_up.clone(), msg);
+            let is_close = ws_frame.is_close();
             let frame_msg = DataChannelMessage::WsFrame(ws_frame);
             if let Ok(json) = serde_json::to_vec(&frame_msg)
                 && dc_tx_up.send(json).await.is_err()
@@ -488,9 +486,8 @@ async fn run_ws_bridge(
     // Data channel → local WS
     let dc_to_upstream = tokio::spawn(async move {
         while let Some(frame) = frame_rx.recv().await {
-            let is_close = matches!(frame.msg_type, RelayWsMessageType::Close);
-            let relay_frame = frame.into_relay_frame();
-            let msg = match tokio_tungstenite::tungstenite::Message::reconstruct(relay_frame) {
+            let is_close = frame.is_close();
+            let msg: tokio_tungstenite::tungstenite::Message = match frame.into_transport() {
                 Ok(m) => m,
                 Err(_) => break,
             };
