@@ -265,8 +265,8 @@ export function ChangesPanelContainer({
     if (!root) return;
     clearSearchTextHighlights(root);
     const query = searchQuery.trim();
-    if (showSearch && query.length >= 2) {
-      applySearchTextHighlights(root, query);
+    if (showSearch && query.length >= 1) {
+      applySearchTextHighlights(root, query, { maxMatches: 1200 });
     }
   }, [showSearch, searchQuery, diffItems, currentMatchIdx]);
 
@@ -363,9 +363,10 @@ export function ChangesPanelContainer({
         if (!panelRef.current) return;
         clearSearchTextHighlights(panelRef.current);
         const query = searchQuery.trim();
-        // Keep card-level matches for single-char search; inline highlight starts at 2 chars.
-        if (showSearch && query.length >= 2) {
-          applySearchTextHighlights(panelRef.current, query);
+        if (showSearch && query.length >= 1) {
+          applySearchTextHighlights(panelRef.current, query, {
+            maxMatches: 1200,
+          });
         }
       }, 80);
     };
