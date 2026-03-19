@@ -63,6 +63,28 @@
           "autonomy": "skip-permissions-unsafe"
         }
       }
+    },
+    "PI": {
+      "DEFAULT": {
+        "PI": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-20250514",
+          "thinking": "medium"
+        }
+      },
+      "OPUS": {
+        "PI": {
+          "provider": "anthropic",
+          "model": "claude-opus-4-20250115",
+          "thinking": "high"
+        }
+      },
+      "OPENAI": {
+        "PI": {
+          "provider": "openai",
+          "model": "o3"
+        }
+      }
     }
   }
 }
