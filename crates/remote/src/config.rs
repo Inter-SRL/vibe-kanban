@@ -327,8 +327,12 @@ pub struct LocalAuthConfig {
 
 impl LocalAuthConfig {
     fn from_env() -> Result<Option<Self>, ConfigError> {
-        let email = env::var("SELF_HOST_LOCAL_AUTH_EMAIL").ok();
-        let password = env::var("SELF_HOST_LOCAL_AUTH_PASSWORD").ok();
+        let email = env::var("SELF_HOST_LOCAL_AUTH_EMAIL")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let password = env::var("SELF_HOST_LOCAL_AUTH_PASSWORD")
+            .ok()
+            .filter(|v| !v.is_empty());
 
         let (email, password) = match (email, password) {
             (None, None) => return Ok(None),
@@ -338,14 +342,6 @@ impl LocalAuthConfig {
                 return Err(ConfigError::MissingVar("SELF_HOST_LOCAL_AUTH_PASSWORD"));
             }
         };
-
-        if email.trim().is_empty() {
-            return Err(ConfigError::InvalidVar("SELF_HOST_LOCAL_AUTH_EMAIL"));
-        }
-
-        if password.is_empty() {
-            return Err(ConfigError::InvalidVar("SELF_HOST_LOCAL_AUTH_PASSWORD"));
-        }
 
         Ok(Some(Self {
             email,
