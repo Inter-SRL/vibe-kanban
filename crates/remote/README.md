@@ -93,11 +93,61 @@ Additional endpoint with the `relay` profile:
 
 - Relay API: `http://localhost:8082`
 
+## Local HTTPS with Caddy (Optional)
+
+Use [Caddy](https://caddyserver.com) as a reverse proxy to terminate TLS locally. A `Caddyfile` is already provided in the repository root.
+
+### Install Caddy
+
+```bash
+# macOS
+brew install caddy
+
+# Debian/Ubuntu
+sudo apt install caddy
+```
+
+### Start Caddy
+
+In a separate terminal from the repo root:
+
+```bash
+caddy run --config Caddyfile
+```
+
+The first time Caddy runs it installs a local CA certificate — you may be prompted for your password.
+
+This gives you:
+
+- `https://localhost:3001` → remote web UI/API
+- `https://relay.localhost:3001` → relay API (requires `relay` profile)
+
+Update your OAuth callback URLs accordingly:
+
+- **GitHub**: `https://localhost:3001/v1/oauth/github/callback`
+- **Google**: `https://localhost:3001/v1/oauth/google/callback`
+
+### Test relay tunnel end-to-end
+
+```bash
+export VK_SHARED_API_BASE=https://localhost:3001
+export VK_SHARED_RELAY_API_BASE=https://relay.localhost:3001
+
+pnpm run dev
+```
+
+Quick checks:
+
+```bash
+curl -sk https://localhost:3001/v1/health
+curl -sk https://relay.localhost:3001/health
+```
+
+If the relay health endpoint returns HTML instead of `{"status":"ok"}`, your Caddy host routing is incorrect.
+
 ## Desktop App
 
-The Docker Compose stack no longer runs `local-server`.
-
-If you want to run the desktop/local app against this remote stack, run it separately on the host and point it at the remote API:
+To run the desktop/local app against this remote stack:
 
 ```bash
 export VK_SHARED_API_BASE=http://localhost:3000
