@@ -8,7 +8,6 @@ import {
 } from '@vibe/ui/components/KeyboardDialog';
 import { Button } from '@vibe/ui/components/Button';
 import { Input } from '@vibe/ui/components/Input';
-import { Label } from '@vibe/ui/components/Label';
 import { Alert, AlertDescription } from '@vibe/ui/components/Alert';
 import { LogIn, Loader2 } from 'lucide-react';
 import { OAuthSignInButton } from '@vibe/ui/components/OAuthButtons';
@@ -271,39 +270,39 @@ const OAuthDialogImpl = create<OAuthDialogProps>(({ initialProvider }) => {
                 </Button>
               )}
               {!isAuthMethodsError && hasLocalAuth && (
-                <div className="space-y-3 rounded-sm border border-border p-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="local-auth-email">Email</Label>
-                    <Input
-                      id="local-auth-email"
-                      type="email"
-                      value={localEmail}
-                      onChange={(event) => setLocalEmail(event.target.value)}
-                      placeholder="Email"
-                      autoComplete="username"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="local-auth-password">Password</Label>
-                    <Input
-                      id="local-auth-password"
-                      type="password"
-                      value={localPassword}
-                      onChange={(event) => setLocalPassword(event.target.value)}
-                      placeholder="Password"
-                      autoComplete="current-password"
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
+                <>
+                  <Input
+                    id="local-auth-email"
+                    type="email"
+                    value={localEmail}
+                    onChange={(event) => setLocalEmail(event.target.value)}
+                    placeholder="Email"
+                    autoComplete="username"
+                  />
+                  <Input
+                    id="local-auth-password"
+                    type="password"
+                    value={localPassword}
+                    onChange={(event) => setLocalPassword(event.target.value)}
+                    placeholder="Password"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="relative flex h-10 w-full items-center overflow-hidden rounded-[4px] border border-[#dadce0] bg-[#f2f2f2] px-3 text-[14px] font-medium leading-5 tracking-[0.25px] text-[#1f1f1f] transition-colors duration-150 hover:bg-[#e8eaed] active:bg-[#e2e3e5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8]/40 disabled:cursor-not-allowed disabled:bg-[#ffffff61] disabled:text-[#1f1f1f]/40"
                     onClick={() => void handleLocalLogin()}
                     disabled={
                       isSubmittingLocal || !localEmail.trim() || !localPassword
                     }
+                    style={{ fontFamily: "'Roboto', Arial, sans-serif" }}
                   >
-                    {isSubmittingLocal ? 'Signing in...' : 'Sign in with email'}
-                  </Button>
-                </div>
+                    <span className="w-full text-center">
+                      {isSubmittingLocal
+                        ? 'Signing in...'
+                        : 'Sign in with email'}
+                    </span>
+                  </button>
+                </>
               )}
               {!isAuthMethodsError &&
                 hasOAuthProviders &&
