@@ -68,14 +68,14 @@
       "DEFAULT": {
         "PI": {
           "provider": "anthropic",
-          "model": "claude-sonnet-4-20250514",
+          "model": "claude-sonnet-4-6",
           "thinking": "medium"
         }
       },
       "OPUS": {
         "PI": {
           "provider": "anthropic",
-          "model": "claude-opus-4-20250115",
+          "model": "claude-opus-4-6",
           "thinking": "high"
         }
       },
