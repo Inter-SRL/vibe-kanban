@@ -81,17 +81,12 @@ const PersistedDiffItem = memo(function PersistedDiffItem({
     `diff:${path}`,
     initialExpanded
   );
-
-  useEffect(() => {
-    if (forceExpand) {
-      toggle(true);
-    }
-  }, [forceExpand, toggle]);
+  const effectiveExpanded = forceExpand || expanded;
 
   return (
     <PierreDiffCard
       diff={diff}
-      expanded={expanded}
+      expanded={effectiveExpanded}
       onToggle={toggle}
       workspaceId={workspaceId}
       className={
@@ -307,11 +302,11 @@ export function ChangesPanelContainer({
     if (!root) return;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let rafId: number | null = null;
-    let isApplying = false;
+    let applyingDepth = 0;
 
     const apply = () => {
       if (!panelRef.current) return;
-      isApplying = true;
+      applyingDepth += 1;
       clearSearchTextHighlightsWithKey(panelRef.current, DIFFS_HIGHLIGHT_KEY);
       const query = searchQuery.trim();
       if (showSearch && query.length >= 1) {
@@ -320,7 +315,9 @@ export function ChangesPanelContainer({
           highlightKey: DIFFS_HIGHLIGHT_KEY,
         });
       }
-      isApplying = false;
+      queueMicrotask(() => {
+        applyingDepth = Math.max(0, applyingDepth - 1);
+      });
     };
 
     const scheduleApply = () => {
@@ -340,7 +337,7 @@ export function ChangesPanelContainer({
     }
 
     const observer = new MutationObserver(() => {
-      if (isApplying) return;
+      if (applyingDepth > 0) return;
       scheduleApply();
     });
 
