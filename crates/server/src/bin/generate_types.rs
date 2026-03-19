@@ -336,6 +336,10 @@ fn generate_schemas() -> Result<HashMap<&'static str, String>, serde_json::Error
             "droid",
             generate_json_schema::<executors::executors::droid::Droid>()?,
         ),
+        (
+            "pi",
+            generate_json_schema::<executors::executors::pi::Pi>()?,
+        ),
     ]);
     println!(
         "✅ JSON schemas generated. {} schemas created.",
