@@ -107,8 +107,9 @@ COPY --from=fe-builder /app/packages/local-web/dist packages/local-web/dist
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=workspace-target,target=/app/target \
-    cargo build --locked --release --bin server \
- && cp /app/target/release/server /usr/local/bin/server
+    cargo build --locked --release --bin server --bin vibe-kanban-mcp \
+ && cp /app/target/release/server /usr/local/bin/server \
+ && cp /app/target/release/vibe-kanban-mcp /usr/local/bin/vibe-kanban-mcp
 
 FROM debian:bookworm-slim AS runtime
 
@@ -119,12 +120,15 @@ RUN apt-get update \
     openssh-client \
     tini \
     wget \
+    nodejs \
+    npm \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --system --create-home --uid 10001 appuser
 
 WORKDIR /repos
 
 COPY --from=builder /usr/local/bin/server /usr/local/bin/server
+COPY --from=builder /usr/local/bin/vibe-kanban-mcp /usr/local/bin/vibe-kanban-mcp
 
 RUN mkdir -p /repos \
   && chown -R appuser:appuser /repos
