@@ -14,8 +14,10 @@ import { PierreDiffCard } from './PierreDiffCard';
 import type { Diff, DiffChangeKind } from 'shared/types';
 import {
   applySearchTextHighlights,
-  clearSearchTextHighlights,
+  clearSearchTextHighlightsWithKey,
 } from '@/shared/lib/searchTextHighlight';
+
+const DIFFS_HIGHLIGHT_KEY = 'vk-search-highlight-diffs';
 
 // Auto-collapse defaults based on change type (matches DiffsPanel behavior)
 const COLLAPSE_BY_CHANGE_TYPE: Record<DiffChangeKind, boolean> = {
@@ -270,11 +272,12 @@ export function ChangesPanelContainer({
     const apply = () => {
       if (!panelRef.current) return;
       isApplying = true;
-      clearSearchTextHighlights(panelRef.current);
+      clearSearchTextHighlightsWithKey(panelRef.current, DIFFS_HIGHLIGHT_KEY);
       const query = searchQuery.trim();
       if (showSearch && query.length >= 1) {
         applySearchTextHighlights(panelRef.current, query, {
           maxMatches: 1200,
+          highlightKey: DIFFS_HIGHLIGHT_KEY,
         });
       }
       isApplying = false;
@@ -292,7 +295,7 @@ export function ChangesPanelContainer({
 
     if (!showSearch || !searchQuery.trim()) {
       return () => {
-        clearSearchTextHighlights(root);
+        clearSearchTextHighlightsWithKey(root, DIFFS_HIGHLIGHT_KEY);
       };
     }
 
@@ -310,7 +313,7 @@ export function ChangesPanelContainer({
       observer.disconnect();
       if (timeoutId) clearTimeout(timeoutId);
       if (rafId) cancelAnimationFrame(rafId);
-      clearSearchTextHighlights(root);
+      clearSearchTextHighlightsWithKey(root, DIFFS_HIGHLIGHT_KEY);
     };
   }, [showSearch, searchQuery, diffItems, currentMatchIdx]);
 
@@ -405,11 +408,12 @@ export function ChangesPanelContainer({
       }
       highlightTimeoutRef.current = setTimeout(() => {
         if (!panelRef.current) return;
-        clearSearchTextHighlights(panelRef.current);
+        clearSearchTextHighlightsWithKey(panelRef.current, DIFFS_HIGHLIGHT_KEY);
         const query = searchQuery.trim();
         if (showSearch && query.length >= 1) {
           applySearchTextHighlights(panelRef.current, query, {
             maxMatches: 1200,
+            highlightKey: DIFFS_HIGHLIGHT_KEY,
           });
         }
       }, 80);
@@ -427,7 +431,7 @@ export function ChangesPanelContainer({
         clearTimeout(highlightTimeoutRef.current);
       }
       if (panelRef.current) {
-        clearSearchTextHighlights(panelRef.current);
+        clearSearchTextHighlightsWithKey(panelRef.current, DIFFS_HIGHLIGHT_KEY);
       }
     };
   }, []);
