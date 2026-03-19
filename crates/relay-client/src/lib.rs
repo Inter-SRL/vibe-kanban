@@ -373,14 +373,18 @@ impl RelayHostTransport {
     where
         TData: DeserializeOwned,
     {
-        if let Ok(data) = self.get_signed_json_once(path).await {
-            return Ok(data);
+        match self.get_signed_json_once(path).await {
+            Ok(data) => return Ok(data),
+            Err(ref error) if is_request_auth_failure(error) => {}
+            Err(error) => return Err(error),
         }
 
         self.refresh_signing_session().await?;
 
-        if let Ok(data) = self.get_signed_json_once(path).await {
-            return Ok(data);
+        match self.get_signed_json_once(path).await {
+            Ok(data) => return Ok(data),
+            Err(ref error) if is_request_auth_failure(error) => {}
+            Err(error) => return Err(error),
         }
 
         self.rotate_remote_session().await?;
@@ -621,6 +625,16 @@ fn is_auth_failure_status(status_code: u16) -> bool {
 fn is_ws_auth_failure(error: &RelayApiError) -> bool {
     if let RelayApiError::WebSocket(tungstenite::Error::Http(response)) = error {
         is_auth_failure_status(response.status().as_u16())
+    } else {
+        false
+    }
+}
+
+fn is_request_auth_failure(error: &RelayApiError) -> bool {
+    if let RelayApiError::Request(request_error) = error
+        && let Some(status) = request_error.status()
+    {
+        is_auth_failure_status(status.as_u16())
     } else {
         false
     }
