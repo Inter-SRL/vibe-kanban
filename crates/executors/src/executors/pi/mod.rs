@@ -11,7 +11,8 @@ use crate::{
     command::{CmdOverrides, CommandBuildError, CommandBuilder, apply_overrides},
     env::ExecutionEnv,
     executors::{
-        AppendPrompt, BaseCodingAgent, ExecutorError, SpawnedChild, StandardCodingAgentExecutor,
+        AppendPrompt, BaseCodingAgent, ExecutorError, SpawnedChild,
+        StandardCodingAgentExecutor,
     },
     logs::{stderr_processor::normalize_stderr_logs, utils::EntryIndexProvider},
     profile::ExecutorConfig,
@@ -65,7 +66,7 @@ pub struct Pi {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(
         title = "Model",
-        description = "Model to use (e.g., claude-sonnet-4-20250514, claude-opus-4-20250115, o3)"
+        description = "Model to use (e.g., claude-sonnet-4-6, claude-opus-4-6, o3)"
     )]
     pub model: Option<String>,
 
@@ -90,7 +91,7 @@ pub struct Pi {
 impl Pi {
     fn build_command_builder(&self) -> Result<CommandBuilder, CommandBuildError> {
         let mut builder = CommandBuilder::new("npx -y @mariozechner/pi-coding-agent")
-            .params(["--mode", "rpc"]);
+            .params(["--mode", "json"]);
 
         if let Some(provider) = &self.provider {
             builder = builder.extend_params(["--provider", provider.as_str()]);
@@ -134,16 +135,10 @@ async fn spawn_pi(
 
     let mut child = command.group_spawn_no_window()?;
 
-    // Send initial prompt via RPC protocol as a JSON-line message to stdin,
-    // then close the pipe so Pi processes the prompt and streams results.
-    // Follow-ups are handled by spawning a new process with --continue.
+    // Send prompt via stdin, then close the pipe so Pi processes it and exits.
+    // In --mode json, Pi reads the prompt from stdin as plain text.
     if let Some(mut stdin) = child.inner().stdin.take() {
-        let rpc_msg = serde_json::json!({
-            "type": "prompt",
-            "message": prompt
-        });
-        let line = format!("{}\n", rpc_msg);
-        stdin.write_all(line.as_bytes()).await?;
+        stdin.write_all(prompt.as_bytes()).await?;
         stdin.shutdown().await?;
     }
 
