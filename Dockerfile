@@ -116,12 +116,13 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     git \
     openssh-client \
     tini \
     wget \
-    nodejs \
-    npm \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --system --create-home --uid 10001 appuser
 
