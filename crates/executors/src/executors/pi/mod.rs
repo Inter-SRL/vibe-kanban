@@ -219,4 +219,43 @@ impl StandardCodingAgentExecutor for Pi {
             permission_policy: Some(crate::model_selector::PermissionPolicy::Auto),
         }
     }
+
+    async fn discover_options(
+        &self,
+        _workdir: Option<&std::path::Path>,
+        _repo_path: Option<&std::path::Path>,
+    ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        use crate::{
+            executor_discovery::ExecutorDiscoveredOptions,
+            logs::utils::patch,
+            model_selector::{ModelInfo, ModelSelectorConfig},
+        };
+
+        let options = ExecutorDiscoveredOptions {
+            model_selector: ModelSelectorConfig {
+                models: [
+                    ("claude-opus-4-6", "Claude Opus 4.6"),
+                    ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+                    ("claude-haiku-4-5", "Claude Haiku 4.5"),
+                    ("o3", "OpenAI o3"),
+                    ("gpt-5.3-codex", "GPT 5.3 Codex"),
+                    ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+                    ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+                ]
+                .into_iter()
+                .map(|(id, name)| ModelInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    provider_id: None,
+                    reasoning_options: vec![],
+                })
+                .collect(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        Ok(Box::pin(futures::stream::once(async move {
+            patch::executor_discovered_options(options)
+        })))
+    }
 }
