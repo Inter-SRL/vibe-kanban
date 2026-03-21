@@ -185,6 +185,7 @@ pub async fn authorize_callback(
             }
         }
         Err(error) => {
+            tracing::error!(?error, "OAuth callback failed");
             let (status, message) = classify_handoff_error(&error);
             (
                 status,
