@@ -869,10 +869,20 @@ impl AuthorizationProvider for ZitadelOIDCProvider {
                 ("redirect_uri", redirect_uri),
             ])
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
 
-        match response.json::<ZitadelTokenResponse>().await? {
+        let status = response.status();
+        let body_text = response.text().await?;
+
+        if !status.is_success() {
+            tracing::error!(
+                %status, body = %body_text, %token_url, %redirect_uri,
+                "Zitadel token exchange failed"
+            );
+            anyhow::bail!("Zitadel token exchange failed: {status} {body_text}");
+        }
+
+        match serde_json::from_str::<ZitadelTokenResponse>(&body_text)? {
             ZitadelTokenResponse::Success {
                 access_token,
                 token_type,
@@ -913,15 +923,22 @@ impl AuthorizationProvider for ZitadelOIDCProvider {
         let bearer = format!("Bearer {}", access_token.expose_secret());
         let userinfo_url = format!("{}/oidc/v1/userinfo", self.issuer);
 
-        let profile: ZitadelUserInfo = self
+        let response = self
             .client
             .get(&userinfo_url)
             .header("Authorization", bearer)
             .send()
-            .await?
-            .error_for_status()?
-            .json()
             .await?;
+
+        let status = response.status();
+        let body_text = response.text().await?;
+
+        if !status.is_success() {
+            tracing::error!(%status, body = %body_text, "Zitadel userinfo request failed");
+            anyhow::bail!("Zitadel userinfo failed: {status} {body_text}");
+        }
+
+        let profile: ZitadelUserInfo = serde_json::from_str(&body_text)?;
 
         let login = profile
             .preferred_username

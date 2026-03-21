@@ -57,20 +57,6 @@ export default function LoginPage() {
 
           <section className="flex flex-col items-center gap-2">
             <OAuthButton
-              provider="github"
-              label="Continue with GitHub"
-              onClick={() => void handleLogin("github")}
-              disabled={pending !== null}
-              loading={pending === "github"}
-            />
-            <OAuthButton
-              provider="google"
-              label="Continue with Google"
-              onClick={() => void handleLogin("google")}
-              disabled={pending !== null}
-              loading={pending === "google"}
-            />
-            <OAuthButton
               provider="zitadel"
               label="Sign in with G13N Foundation"
               onClick={() => void handleLogin("zitadel")}
