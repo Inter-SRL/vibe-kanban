@@ -29,22 +29,14 @@ impl<'a> UserRepository<'a> {
     }
 
     pub async fn get_by_email(&self, email: &str) -> Result<Option<User>, IdentityError> {
-        query_as!(
-            User,
+        sqlx::query_as::<_, User>(
             r#"
-            SELECT
-                id           AS "id!: Uuid",
-                email        AS "email!",
-                first_name   AS "first_name?",
-                last_name    AS "last_name?",
-                username     AS "username?",
-                created_at   AS "created_at!",
-                updated_at   AS "updated_at!"
+            SELECT id, email, first_name, last_name, username, created_at, updated_at
             FROM users
             WHERE email = $1
             "#,
-            email
         )
+        .bind(email)
         .fetch_optional(self.pool)
         .await
         .map_err(IdentityError::from)
