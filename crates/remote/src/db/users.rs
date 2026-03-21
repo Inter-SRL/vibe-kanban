@@ -28,6 +28,28 @@ impl<'a> UserRepository<'a> {
             .map_err(IdentityError::from)
     }
 
+    pub async fn get_by_email(&self, email: &str) -> Result<Option<User>, IdentityError> {
+        query_as!(
+            User,
+            r#"
+            SELECT
+                id           AS "id!: Uuid",
+                email        AS "email!",
+                first_name   AS "first_name?",
+                last_name    AS "last_name?",
+                username     AS "username?",
+                created_at   AS "created_at!",
+                updated_at   AS "updated_at!"
+            FROM users
+            WHERE email = $1
+            "#,
+            email
+        )
+        .fetch_optional(self.pool)
+        .await
+        .map_err(IdentityError::from)
+    }
+
     pub async fn fetch_user(&self, user_id: Uuid) -> Result<User, IdentityError> {
         query_as!(
             User,

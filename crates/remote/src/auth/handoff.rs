@@ -440,7 +440,23 @@ impl OAuthHandoffService {
 
         let user_id = match existing_account {
             Some(account) => account.user_id,
-            None => Uuid::new_v4(),
+            None => {
+                // No OAuth account for this provider yet.
+                // Check if a user with the same email already exists
+                // (e.g., previously logged in via a different provider).
+                match user_repo.get_by_email(&email).await {
+                    Ok(Some(existing_user)) => {
+                        tracing::info!(
+                            email = %email,
+                            provider = %provider.name(),
+                            existing_user_id = %existing_user.id,
+                            "Linking new OAuth provider to existing user by email"
+                        );
+                        existing_user.id
+                    }
+                    _ => Uuid::new_v4(),
+                }
+            }
         };
 
         let (first_name, last_name) = split_name(profile.name.as_deref());
