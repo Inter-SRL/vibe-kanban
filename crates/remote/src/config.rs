@@ -307,9 +307,31 @@ impl OAuthProviderConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct ZitadelOIDCConfig {
+    client_id: String,
+    client_secret: SecretString,
+    issuer: String,
+}
+
+impl ZitadelOIDCConfig {
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
+    pub fn client_secret(&self) -> &SecretString {
+        &self.client_secret
+    }
+
+    pub fn issuer(&self) -> &str {
+        &self.issuer
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AuthConfig {
     github: Option<OAuthProviderConfig>,
     google: Option<OAuthProviderConfig>,
+    zitadel: Option<ZitadelOIDCConfig>,
     jwt_secret: SecretString,
     public_base_url: String,
 }
@@ -345,7 +367,22 @@ impl AuthConfig {
             _ => None,
         };
 
-        if github.is_none() && google.is_none() {
+        let zitadel = match env::var("ZITADEL_OIDC_CLIENT_ID") {
+            Ok(client_id) if !client_id.is_empty() => {
+                let client_secret = env::var("ZITADEL_OIDC_CLIENT_SECRET")
+                    .map_err(|_| ConfigError::MissingVar("ZITADEL_OIDC_CLIENT_SECRET"))?;
+                let issuer = env::var("ZITADEL_OIDC_ISSUER")
+                    .map_err(|_| ConfigError::MissingVar("ZITADEL_OIDC_ISSUER"))?;
+                Some(ZitadelOIDCConfig {
+                    client_id,
+                    client_secret: SecretString::new(client_secret.into()),
+                    issuer,
+                })
+            }
+            _ => None,
+        };
+
+        if github.is_none() && google.is_none() && zitadel.is_none() {
             return Err(ConfigError::NoOAuthProviders);
         }
 
@@ -355,6 +392,7 @@ impl AuthConfig {
         Ok(Self {
             github,
             google,
+            zitadel,
             jwt_secret,
             public_base_url,
         })
@@ -366,6 +404,10 @@ impl AuthConfig {
 
     pub fn google(&self) -> Option<&OAuthProviderConfig> {
         self.google.as_ref()
+    }
+
+    pub fn zitadel(&self) -> Option<&ZitadelOIDCConfig> {
+        self.zitadel.as_ref()
     }
 
     pub fn jwt_secret(&self) -> &SecretString {

@@ -5,7 +5,7 @@ import type { ListOrganizationsResponse } from "shared/types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-export type OAuthProvider = "github" | "google";
+export type OAuthProvider = "github" | "google" | "zitadel";
 
 type HandoffInitResponse = {
   handoff_id: string;

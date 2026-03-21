@@ -10,6 +10,7 @@ use crate::{
     attachments::cleanup::spawn_cleanup_task,
     auth::{
         GitHubOAuthProvider, GoogleOAuthProvider, JwtService, OAuthHandoffService,
+        ZitadelOIDCProvider,
         OAuthTokenValidator, ProviderRegistry,
     },
     azure_blob::AzureBlobService,
@@ -70,6 +71,14 @@ impl Server {
             registry.register(GoogleOAuthProvider::new(
                 google.client_id().to_string(),
                 google.client_secret().clone(),
+            )?);
+        }
+
+        if let Some(zitadel) = auth_config.zitadel() {
+            registry.register(ZitadelOIDCProvider::new(
+                zitadel.client_id().to_string(),
+                zitadel.client_secret().clone(),
+                zitadel.issuer().to_string(),
             )?);
         }
 

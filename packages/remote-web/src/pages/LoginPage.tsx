@@ -70,6 +70,13 @@ export default function LoginPage() {
               disabled={pending !== null}
               loading={pending === "google"}
             />
+            <OAuthButton
+              provider="zitadel"
+              label="Sign in with G13N Foundation"
+              onClick={() => void handleLogin("zitadel")}
+              disabled={pending !== null}
+              loading={pending === "zitadel"}
+            />
           </section>
 
           <p className="text-center text-sm text-low">
@@ -111,7 +118,7 @@ function OAuthButton({
       disabled={disabled || loading}
     >
       {loading
-        ? `Opening ${provider === "github" ? "GitHub" : "Google"}...`
+        ? `Opening ${provider === "github" ? "GitHub" : provider === "google" ? "Google" : "G13N Foundation"}...`
         : label}
     </button>
   );

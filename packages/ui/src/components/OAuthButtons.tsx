@@ -4,7 +4,7 @@ import { GitHubDark } from 'developer-icons';
 import { useTranslation } from 'react-i18next';
 import { GoogleLogo } from './GoogleLogo';
 
-export type OAuthProvider = 'github' | 'google';
+export type OAuthProvider = 'github' | 'google' | 'zitadel';
 
 interface OAuthSignInButtonProps {
   provider: OAuthProvider;
@@ -23,6 +23,10 @@ const providerConfig = {
   google: {
     i18nKey: 'oauth.continueWithGoogle' as const,
     icon: () => <GoogleLogo className="size-5" />,
+  },
+  zitadel: {
+    i18nKey: 'oauth.continueWithZitadel' as const,
+    icon: () => <span className="flex size-5 items-center justify-center text-xs font-bold">G13N</span>,
   },
 };
 
