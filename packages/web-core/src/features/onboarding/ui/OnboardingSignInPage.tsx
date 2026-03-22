@@ -85,7 +85,6 @@ export function OnboardingSignInPage() {
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(
     null
   );
-  const [proxyLoginAttempted, setProxyLoginAttempted] = useState(false);
   const proxyLoginRef = useRef(false);
 
   const isLoggedIn = loginStatus?.status === 'loggedin';
@@ -103,8 +102,6 @@ export function OnboardingSignInPage() {
         }
       } catch {
         // Not behind a proxy or token invalid — fall through to manual sign-in
-      } finally {
-        setProxyLoginAttempted(true);
       }
     })();
   }, [isLoggedIn, loading, reloadSystem]);
