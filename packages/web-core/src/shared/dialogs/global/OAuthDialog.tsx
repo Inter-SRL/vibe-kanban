@@ -31,7 +31,7 @@ type OAuthState =
   | { type: 'success'; profile: ProfileResponse }
   | { type: 'error'; message: string };
 
-const OAuthDialogImpl = create<OAuthDialogProps>(({ initialProvider }) => {
+const OAuthDialogImpl = create<OAuthDialogProps>(({ initialProvider = 'zitadel' }) => {
   const modal = useModal();
   const { t } = useTranslation('common');
   const queryClient = useQueryClient();
