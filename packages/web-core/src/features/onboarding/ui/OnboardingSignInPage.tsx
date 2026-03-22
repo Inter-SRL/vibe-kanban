@@ -57,7 +57,8 @@ type SignInCompletionMethod =
   | 'continue_logged_in'
   | 'skip_sign_in'
   | 'oauth_github'
-  | 'oauth_google';
+  | 'oauth_google'
+  | 'oauth_zitadel';
 function resolveTheme(theme: ThemeMode): 'light' | 'dark' {
   if (theme === ThemeMode.SYSTEM) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -209,7 +210,7 @@ export function OnboardingSignInPage() {
 
     if (profile) {
       await finishOnboarding({
-        method: provider === 'github' ? 'oauth_github' : 'oauth_google',
+        method: `oauth_${provider}` as SignInCompletionMethod,
       });
     }
   };
@@ -276,18 +277,11 @@ export function OnboardingSignInPage() {
             <>
               <section className="flex flex-col items-center gap-2">
                 <OAuthSignInButton
-                  provider="github"
-                  onClick={() => void handleProviderSignIn('github')}
+                  provider="zitadel"
+                  onClick={() => void handleProviderSignIn('zitadel')}
                   disabled={saving || pendingProvider !== null}
-                  loading={pendingProvider === 'github'}
-                  loadingText="Opening GitHub..."
-                />
-                <OAuthSignInButton
-                  provider="google"
-                  onClick={() => void handleProviderSignIn('google')}
-                  disabled={saving || pendingProvider !== null}
-                  loading={pendingProvider === 'google'}
-                  loadingText="Opening Google..."
+                  loading={pendingProvider === 'zitadel'}
+                  loadingText="Signing in..."
                 />
               </section>
 

@@ -22,7 +22,7 @@ import type { ProfileResponse } from 'shared/types';
 import { useTranslation } from 'react-i18next';
 import { defineModal } from '@/shared/lib/modals';
 
-export type OAuthProvider = 'github' | 'google';
+export type OAuthProvider = 'github' | 'google' | 'zitadel';
 type OAuthDialogProps = { initialProvider?: OAuthProvider };
 
 type OAuthState =
@@ -198,14 +198,9 @@ const OAuthDialogImpl = create<OAuthDialogProps>(({ initialProvider }) => {
 
             <div className="space-y-3 py-4">
               <OAuthSignInButton
-                provider="github"
+                provider="zitadel"
                 className="w-full"
-                onClick={() => handleProviderSelect('github')}
-              />
-              <OAuthSignInButton
-                provider="google"
-                className="w-full"
-                onClick={() => handleProviderSelect('google')}
+                onClick={() => handleProviderSelect('zitadel')}
               />
             </div>
 
