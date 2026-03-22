@@ -365,18 +365,10 @@ async fn proxy_login(
 
     match handoff.proxy_login(&payload.zitadel_access_token).await {
         Ok(response) => {
-            audit::emit(AuditEvent {
-                action: AuditAction::Login,
-                user_id: Some(response.user_id),
-                session_id: None,
-                resource_type: "auth_session",
-                resource_id: "",
-                organization_id: "",
-                http_method: "POST",
-                http_path: "/v1/auth/proxy-login",
-                http_status: 200,
-                description: "User logged in via proxy SSO",
-            });
+            let mut event = AuditEvent::system(AuditAction::AuthLogin);
+            event.user_id = Some(response.user_id);
+            event.description = Some("User logged in via proxy SSO".to_string());
+            audit::emit(event);
 
             Json(serde_json::json!({
                 "access_token": response.access_token,
