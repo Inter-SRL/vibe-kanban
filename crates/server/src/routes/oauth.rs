@@ -2,7 +2,7 @@ use api_types::{HandoffInitRequest, HandoffRedeemRequest, StatusResponse};
 use axum::{
     Router,
     extract::{Json, Query, State},
-    http::{Response, StatusCode},
+    http::{HeaderMap, Response, StatusCode},
     response::Json as ResponseJson,
     routing::{get, post},
 };
@@ -84,6 +84,7 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/auth/status", get(status))
         .route("/auth/token", get(get_token))
         .route("/auth/user", get(get_current_user))
+        .route("/auth/proxy-login", post(proxy_login))
 }
 
 #[derive(Debug, Deserialize)]
@@ -368,6 +369,87 @@ async fn get_current_user(
     Ok(ResponseJson(ApiResponse::success(CurrentUserResponse {
         user_id,
     })))
+}
+
+/// Proxy login — reads X-Auth-Request-Access-Token from oauth2-proxy ForwardAuth,
+/// calls vk-remote to validate the Zitadel token and create a session.
+async fn proxy_login(
+    State(deployment): State<DeploymentImpl>,
+    headers: HeaderMap,
+) -> Result<ResponseJson<ApiResponse<StatusResponse>>, ApiError> {
+    use api_types::LoginStatus;
+
+    // Already logged in? Skip.
+    if let LoginStatus::LoggedIn { profile } = deployment.get_login_status().await {
+        return Ok(ResponseJson(ApiResponse::success(StatusResponse {
+            logged_in: true,
+            profile: Some(profile),
+            degraded: None,
+        })));
+    }
+
+    // Extract the Zitadel access token from oauth2-proxy headers
+    let zitadel_token = headers
+        .get("x-auth-request-access-token")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| ApiError::Unauthorized)?;
+
+    let client = deployment.remote_client()?;
+
+    // Call vk-remote proxy-login endpoint (server-side, internal URL)
+    let redeem = client
+        .proxy_login(zitadel_token)
+        .await
+        .map_err(|e| {
+            tracing::warn!(?e, "Proxy login to vk-remote failed");
+            ApiError::Unauthorized
+        })?;
+
+    // Save credentials (same pattern as handoff_complete)
+    let expires_at = extract_expiration(&redeem.access_token)
+        .map_err(|err| ApiError::BadRequest(format!("Invalid access token: {err}")))?;
+    let credentials = Credentials {
+        access_token: Some(redeem.access_token.clone()),
+        refresh_token: redeem.refresh_token.clone(),
+        expires_at: Some(expires_at),
+    };
+
+    deployment
+        .auth_context()
+        .save_credentials(&credentials)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "failed to save credentials after proxy login");
+            ApiError::Io(e)
+        })?;
+
+    // Fetch and cache profile
+    let _ = deployment.get_login_status().await;
+
+    // Sync workspaces in background (same as handoff_complete)
+    if let Ok(client) = deployment.remote_client() {
+        let pool = deployment.db().pool.clone();
+        let git = deployment.git().clone();
+        tokio::spawn(async move {
+            remote_sync::sync_all_linked_workspaces(&client, &pool, &git).await;
+        });
+    }
+
+    match deployment.get_login_status().await {
+        LoginStatus::LoggedOut => Ok(ResponseJson(ApiResponse::success(StatusResponse {
+            logged_in: false,
+            profile: None,
+            degraded: None,
+        }))),
+        LoginStatus::LoggedIn { profile } => {
+            tracing::info!("Proxy login successful for {}", profile.email);
+            Ok(ResponseJson(ApiResponse::success(StatusResponse {
+                logged_in: true,
+                profile: Some(profile),
+                degraded: None,
+            })))
+        }
+    }
 }
 
 fn generate_secret() -> String {

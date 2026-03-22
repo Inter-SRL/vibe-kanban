@@ -15,6 +15,7 @@ import { getFirstProjectDestination } from '@/shared/lib/firstProjectDestination
 import { useOrganizationStore } from '@/shared/stores/useOrganizationStore';
 import { isTauriApp } from '@/shared/lib/platform';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
+import { oauthApi } from '@/shared/lib/api';
 
 type OnboardingDestination =
   | { kind: 'workspaces-create' }
@@ -73,7 +74,7 @@ export function OnboardingSignInPage() {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const posthog = usePostHog();
-  const { config, loginStatus, loading, updateAndSaveConfig } = useUserSystem();
+  const { config, loginStatus, loading, updateAndSaveConfig, reloadSystem } = useUserSystem();
   const setSelectedOrgId = useOrganizationStore((s) => s.setSelectedOrgId);
 
   const [showComparison, setShowComparison] = useState(false);
@@ -84,6 +85,29 @@ export function OnboardingSignInPage() {
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(
     null
   );
+  const [proxyLoginAttempted, setProxyLoginAttempted] = useState(false);
+  const proxyLoginRef = useRef(false);
+
+  const isLoggedIn = loginStatus?.status === 'loggedin';
+
+  // Attempt seamless SSO via proxy headers on mount
+  useEffect(() => {
+    if (proxyLoginRef.current || isLoggedIn || loading) return;
+    proxyLoginRef.current = true;
+
+    void (async () => {
+      try {
+        const result = await oauthApi.proxyLogin();
+        if (result.logged_in) {
+          await reloadSystem();
+        }
+      } catch {
+        // Not behind a proxy or token invalid — fall through to manual sign-in
+      } finally {
+        setProxyLoginAttempted(true);
+      }
+    })();
+  }, [isLoggedIn, loading, reloadSystem]);
 
   const trackRemoteOnboardingEvent = useCallback(
     (eventName: string, properties: Record<string, unknown> = {}) => {
@@ -100,8 +124,6 @@ export function OnboardingSignInPage() {
     resolveTheme(theme) === 'dark'
       ? '/vibe-kanban-logo-dark.svg'
       : '/vibe-kanban-logo.svg';
-
-  const isLoggedIn = loginStatus?.status === 'loggedin';
 
   useEffect(() => {
     if (loading || !config || hasTrackedStageViewRef.current) return;

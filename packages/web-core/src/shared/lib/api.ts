@@ -1170,6 +1170,14 @@ export const oauthApi = {
     const response = await makeRequest('/api/auth/user');
     return handleApiResponse<CurrentUserResponse>(response);
   },
+
+  /** Attempt transparent SSO login via proxy headers (no popup needed) */
+  proxyLogin: async (): Promise<StatusResponse> => {
+    const response = await makeRequest('/api/auth/proxy-login', {
+      method: 'POST',
+    });
+    return handleApiResponse<StatusResponse>(response);
+  },
 };
 
 /**

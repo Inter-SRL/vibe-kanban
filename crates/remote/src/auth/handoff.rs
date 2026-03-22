@@ -4,7 +4,7 @@ use anyhow::Error as AnyhowError;
 use chrono::{DateTime, Duration, Utc};
 use rand::{Rng, distr::Alphanumeric};
 use reqwest::StatusCode;
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use thiserror::Error;
@@ -418,6 +418,53 @@ impl OAuthHandoffService {
         } else {
             Err(HandoffError::Failed("user_fetch_failed".into()))
         }
+    }
+
+    /// Authenticate a user via a trusted Zitadel access token (e.g. from oauth2-proxy).
+    /// Validates the token against Zitadel's userinfo endpoint, creates/finds the user,
+    /// creates a session, and returns JWT tokens — no popup, no redirect, no PKCE.
+    pub async fn proxy_login(
+        &self,
+        zitadel_access_token: &str,
+    ) -> Result<RedeemResponse, HandoffError> {
+        let provider = self
+            .providers
+            .get("zitadel")
+            .ok_or_else(|| HandoffError::UnsupportedProvider("zitadel".into()))?;
+
+        // Validate the token by calling Zitadel's userinfo endpoint
+        let secret_token = secrecy::SecretString::from(zitadel_access_token.to_string());
+        let user_profile = provider
+            .fetch_user(&secret_token)
+            .await
+            .map_err(|e| HandoffError::Failed(format!("Failed to validate Zitadel token: {e}")))?;
+
+        tracing::info!(
+            email = %user_profile.email.as_deref().unwrap_or("unknown"),
+            provider_user_id = %user_profile.id,
+            "Proxy login: validated Zitadel token"
+        );
+
+        // Create/find user (reuses existing logic)
+        let user = self
+            .upsert_identity(&provider, &user_profile, None)
+            .await?;
+
+        // Create session
+        let session_repo = AuthSessionRepository::new(&self.pool);
+        let session = session_repo.create(user.id, None).await?;
+
+        // Generate JWT tokens
+        let tokens = self.jwt.generate_tokens(&session, &user, "zitadel")?;
+
+        configure_user_scope(user.id, user.username.as_deref(), Some(user.email.as_str()));
+
+        Ok(RedeemResponse {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            user_id: user.id,
+            email: user.email,
+        })
     }
 
     async fn upsert_identity(

@@ -286,6 +286,23 @@ impl RemoteClient {
             .map_err(|e| self.map_api_error(e))
     }
 
+    /// Authenticates via a trusted Zitadel access token (proxy SSO).
+    pub async fn proxy_login(
+        &self,
+        zitadel_access_token: &str,
+    ) -> Result<HandoffRedeemResponse, RemoteClientError> {
+        #[derive(Serialize)]
+        struct ProxyLoginRequest<'a> {
+            zitadel_access_token: &'a str,
+        }
+        self.post_public(
+            "/v1/auth/proxy-login",
+            Some(&ProxyLoginRequest { zitadel_access_token }),
+        )
+        .await
+        .map_err(|e| self.map_api_error(e))
+    }
+
     /// Gets an invitation by token (public, no auth required).
     pub async fn get_invitation(
         &self,

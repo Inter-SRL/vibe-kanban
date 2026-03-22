@@ -29,6 +29,7 @@ pub fn public_router() -> Router<AppState> {
         .route("/oauth/web/redeem", post(web_redeem))
         .route("/oauth/{provider}/start", get(authorize_start))
         .route("/oauth/{provider}/callback", get(authorize_callback))
+        .route("/auth/proxy-login", post(proxy_login))
 }
 
 pub fn protected_router() -> Router<AppState> {
@@ -345,4 +346,50 @@ fn append_query_params(
         }
     }
     Ok(url)
+}
+
+// ---------------------------------------------------------------------------
+// Proxy login — seamless SSO via trusted Zitadel access token
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ProxyLoginRequest {
+    zitadel_access_token: String,
+}
+
+async fn proxy_login(
+    State(state): State<AppState>,
+    Json(payload): Json<ProxyLoginRequest>,
+) -> Response {
+    let handoff = state.handoff();
+
+    match handoff.proxy_login(&payload.zitadel_access_token).await {
+        Ok(response) => {
+            audit::emit(AuditEvent {
+                action: AuditAction::Login,
+                user_id: Some(response.user_id),
+                session_id: None,
+                resource_type: "auth_session",
+                resource_id: "",
+                organization_id: "",
+                http_method: "POST",
+                http_path: "/v1/auth/proxy-login",
+                http_status: 200,
+                description: "User logged in via proxy SSO",
+            });
+
+            Json(serde_json::json!({
+                "access_token": response.access_token,
+                "refresh_token": response.refresh_token,
+            }))
+            .into_response()
+        }
+        Err(e) => {
+            tracing::warn!("Proxy login failed: {e}");
+            (StatusCode::UNAUTHORIZED, Json(serde_json::json!({
+                "error": format!("{e}")
+            })))
+                .into_response()
+        }
+    }
 }
