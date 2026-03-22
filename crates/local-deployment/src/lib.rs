@@ -58,6 +58,7 @@ pub struct LocalDeployment {
     queued_message_service: QueuedMessageService,
     remote_client: Result<RemoteClient, RemoteClientNotConfigured>,
     shared_api_base: Option<String>,
+    shared_api_base_public: Option<String>,
     auth_context: AuthContext,
     oauth_handoffs: Arc<RwLock<HashMap<Uuid, PendingHandoff>>>,
     trusted_key_auth: TrustedKeyAuthRuntime,
@@ -158,6 +159,12 @@ impl Deployment for LocalDeployment {
             .ok()
             .or_else(|| option_env!("VK_SHARED_API_BASE").map(|s| s.to_string()));
 
+        // Optional public URL override for browser-side API calls (e.g. behind a reverse proxy).
+        // Falls back to VK_SHARED_API_BASE if not set.
+        let api_base_public = std::env::var("VK_SHARED_API_BASE_PUBLIC")
+            .ok()
+            .or_else(|| api_base.clone());
+
         let remote_client = match &api_base {
             Some(url) => match RemoteClient::new(url, auth_context.clone()) {
                 Ok(client) => {
@@ -236,6 +243,7 @@ impl Deployment for LocalDeployment {
             queued_message_service,
             remote_client,
             shared_api_base: api_base,
+            shared_api_base_public: api_base_public,
             auth_context,
             oauth_handoffs,
             trusted_key_auth,
@@ -321,7 +329,7 @@ impl Deployment for LocalDeployment {
     }
 
     fn shared_api_base(&self) -> Option<String> {
-        self.shared_api_base.clone()
+        self.shared_api_base_public.clone()
     }
 }
 
